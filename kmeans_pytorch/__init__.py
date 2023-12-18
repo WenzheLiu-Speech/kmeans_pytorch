@@ -72,11 +72,16 @@ def kmeans(
 
         initial_state_pre = initial_state.clone()
 
+        non_matched_centroid = 0
         for index in range(num_clusters):
             selected = torch.nonzero(choice_cluster == index).squeeze().to(device)
 
             selected = torch.index_select(X, 0, selected)
-            initial_state[index] = selected.mean(dim=0)
+            if len(selected) == 0:
+                initial_state[index] = initial_state_pre[index]
+                non_matched_centroid += 1
+            else:
+                initial_state[index] = selected.mean(dim=0)
 
         center_shift = torch.sum(
             torch.sqrt(
@@ -90,7 +95,8 @@ def kmeans(
         tqdm_meter.set_postfix(
             iteration=f'{iteration}',
             center_shift=f'{center_shift ** 2:0.6f}',
-            tol=f'{tol:0.6f}'
+            tol=f'{tol:0.6f}',
+            non_matched_centroid=f'{non_matched_centroid:0.1f}'
         )
         tqdm_meter.update()
         
