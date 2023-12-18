@@ -55,7 +55,6 @@ def kmeans(
     iteration = 0
     tqdm_meter = tqdm(desc='[running kmeans]')
     while True:
-        import ipdb; ipdb.set_trace()
         dis = pairwise_distance_function(X, initial_state)
 
         choice_cluster = torch.argmin(dis, dim=1)
