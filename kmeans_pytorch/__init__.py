@@ -17,10 +17,11 @@ def initialize(X, num_clusters):
 
 
 def kmeans(
-        X,
+        X_FULL,
         num_clusters,
         distance='euclidean',
         tol=1e-4,
+        trunk_size=2560000,
         device=torch.device('cpu')
 ):
     """
@@ -43,18 +44,28 @@ def kmeans(
     else:
         raise NotImplementedError
 
+    initial_state = None
+
     # convert to float
-    X = X.float()
-
+    X_FULL = X_FULL.float()
+    dataset_size=len(X_FULL)
+    start_index = 0
     # transfer to device
-    X = X.to(device)
-
-    # initialize
-    initial_state = initialize(X, num_clusters)
 
     iteration = 0
     tqdm_meter = tqdm(desc='[running kmeans]')
+    X = None
+
     while True:
+        # A subset of data
+        if X is None:
+            X = X_FULL[start_index:start_index + trunk_size].to(device)
+            print("Process data from {} to {}".format(start_index, start_index + trunk_size))
+
+        # This initial_state is iteratively updated by the dataset
+        if initial_state is None:
+            initial_state = initialize(X, num_clusters)
+
         dis = pairwise_distance_function(X, initial_state, device=device)
 
         choice_cluster = torch.argmin(dis, dim=1)
@@ -82,8 +93,16 @@ def kmeans(
             tol=f'{tol:0.6f}'
         )
         tqdm_meter.update()
+        
         if center_shift ** 2 < tol:
-            break
+            start_index += trunk_size
+            X = None
+
+            if start_index + trunk_size < dataset_size:
+                continue
+            else:
+                # Full data is processed
+                break
 
     return choice_cluster.cpu(), initial_state.cpu()
 
