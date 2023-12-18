@@ -36,6 +36,8 @@ def kmeans(
 
     if distance == 'euclidean':
         pairwise_distance_function = pairwise_distance
+    elif distance == 'euclidean_mem_efficient':
+        pairwise_distance_function = pairwise_distance_euclidean_mem_efficient
     elif distance == 'cosine':
         pairwise_distance_function = pairwise_cosine
     else:
@@ -55,8 +57,6 @@ def kmeans(
     while True:
         import ipdb; ipdb.set_trace()
         dis = pairwise_distance_function(X, initial_state)
-
-        dis2 = pairwise_distance_v2(X, initial_state)   
 
         choice_cluster = torch.argmin(dis, dim=1)
 
@@ -107,7 +107,7 @@ def kmeans_predict(
 
     if distance == 'euclidean':
         pairwise_distance_function = pairwise_distance
-    if distance == 'euclidean_mem_efficient':
+    elif distance == 'euclidean_mem_efficient':
         pairwise_distance_function = pairwise_distance_euclidean_mem_efficient
     elif distance == 'cosine':
         pairwise_distance_function = pairwise_cosine
