@@ -55,7 +55,7 @@ def kmeans(
     iteration = 0
     tqdm_meter = tqdm(desc='[running kmeans]')
     while True:
-        dis = pairwise_distance_function(X, initial_state)
+        dis = pairwise_distance_function(X, initial_state, device=device)
 
         choice_cluster = torch.argmin(dis, dim=1)
 
@@ -136,11 +136,7 @@ def pairwise_distance_euclidean_mem_efficient(data1, data2, device=torch.device(
     # Transpose data2 to make its shape compatible for dot product
     dot_product = torch.mm(data1, data2.transpose(0, 1))
 
-    # Compute pairwise distance
-    # Use broadcasting to make shapes compatible
-    dis = norm1 + norm2.transpose(0, 1) - 2 * dot_product
-
-    return dis
+    return norm1 + norm2.transpose(0, 1) - 2 * dot_product
 
 def pairwise_distance(data1, data2, device=torch.device('cpu')):
     # transfer to device
