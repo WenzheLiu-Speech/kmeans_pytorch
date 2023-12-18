@@ -102,7 +102,7 @@ def kmeans(
             )
             tqdm_meter.update()
             
-            if center_shift ** 2 < tol or iteration > 2000:
+            if center_shift ** 2 < tol or iteration > 10000:
                 start_index += trunk_size
                 X = None
 
