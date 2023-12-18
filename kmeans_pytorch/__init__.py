@@ -49,66 +49,68 @@ def kmeans(
     # convert to float
     X_FULL = X_FULL.float()
     dataset_size=len(X_FULL)
-    start_index = 0
-    # transfer to device
 
     iteration = 0
     tqdm_meter = tqdm(desc='[running kmeans]')
-    X = None
+    
+    # Three epochs
+    for _ in range(1):
+        X = None
+        start_index = 0
+        # For each epochs
+        while True:
+            # A subset of data
+            if X is None:
+                X = X_FULL[start_index:start_index + trunk_size].to(device)
+                print("Process data from {} to {}".format(start_index, start_index + trunk_size))
 
-    while True:
-        # A subset of data
-        if X is None:
-            X = X_FULL[start_index:start_index + trunk_size].to(device)
-            print("Process data from {} to {}".format(start_index, start_index + trunk_size))
+            # This initial_state is iteratively updated by the dataset
+            if initial_state is None:
+                initial_state = initialize(X, num_clusters)
 
-        # This initial_state is iteratively updated by the dataset
-        if initial_state is None:
-            initial_state = initialize(X, num_clusters)
+            dis = pairwise_distance_function(X, initial_state, device=device)
 
-        dis = pairwise_distance_function(X, initial_state, device=device)
+            choice_cluster = torch.argmin(dis, dim=1)
 
-        choice_cluster = torch.argmin(dis, dim=1)
+            initial_state_pre = initial_state.clone()
 
-        initial_state_pre = initial_state.clone()
+            non_matched_centroid = 0
+            for index in range(num_clusters):
+                selected = torch.nonzero(choice_cluster == index).squeeze().to(device)
 
-        non_matched_centroid = 0
-        for index in range(num_clusters):
-            selected = torch.nonzero(choice_cluster == index).squeeze().to(device)
+                selected = torch.index_select(X, 0, selected)
+                if len(selected) == 0:
+                    initial_state[index] = initial_state_pre[index]
+                    non_matched_centroid += 1
+                else:
+                    initial_state[index] = selected.mean(dim=0)
 
-            selected = torch.index_select(X, 0, selected)
-            if len(selected) == 0:
-                initial_state[index] = initial_state_pre[index]
-                non_matched_centroid += 1
-            else:
-                initial_state[index] = selected.mean(dim=0)
+            center_shift = torch.sum(
+                torch.sqrt(
+                    torch.sum((initial_state - initial_state_pre) ** 2, dim=1)
+                ))
 
-        center_shift = torch.sum(
-            torch.sqrt(
-                torch.sum((initial_state - initial_state_pre) ** 2, dim=1)
-            ))
+            # increment iteration
+            iteration = iteration + 1
 
-        # increment iteration
-        iteration = iteration + 1
+            # update tqdm meter
+            tqdm_meter.set_postfix(
+                iteration=f'{iteration}',
+                center_shift=f'{center_shift ** 2:0.6f}',
+                tol=f'{tol:0.6f}',
+                non_matched_centroid=f'{non_matched_centroid:0.1f}'
+            )
+            tqdm_meter.update()
+            
+            if center_shift ** 2 < tol or iteration > 2000:
+                start_index += trunk_size
+                X = None
 
-        # update tqdm meter
-        tqdm_meter.set_postfix(
-            iteration=f'{iteration}',
-            center_shift=f'{center_shift ** 2:0.6f}',
-            tol=f'{tol:0.6f}',
-            non_matched_centroid=f'{non_matched_centroid:0.1f}'
-        )
-        tqdm_meter.update()
-        
-        if center_shift ** 2 < tol:
-            start_index += trunk_size
-            X = None
-
-            if start_index + trunk_size < dataset_size:
-                continue
-            else:
-                # Full data is processed
-                break
+                if start_index + trunk_size < dataset_size:
+                    continue
+                else:
+                    # Full data is processed
+                    break
 
     return choice_cluster.cpu(), initial_state.cpu()
 
