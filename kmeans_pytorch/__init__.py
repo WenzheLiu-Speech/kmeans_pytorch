@@ -21,7 +21,7 @@ def kmeans(
         num_clusters,
         distance='euclidean',
         tol=1e-4,
-        trunk_size=2560000,
+        trunk_size=2560000, # this actually not limited here because we have implemented pairwise_distance_euclidean_mem_efficient_batched
         device=torch.device('cpu')
 ):
     """
@@ -38,7 +38,7 @@ def kmeans(
     if distance == 'euclidean':
         pairwise_distance_function = pairwise_distance
     elif distance == 'euclidean_mem_efficient':
-        pairwise_distance_function = pairwise_distance_euclidean_mem_efficient
+        pairwise_distance_function = pairwise_distance_euclidean_mem_efficient_batched
     elif distance == 'cosine':
         pairwise_distance_function = pairwise_cosine
     else:
@@ -52,11 +52,15 @@ def kmeans(
 
     iteration = 0
     tqdm_meter = tqdm(desc='[running kmeans]')
-    
+    initial_state_list = []
+
     # Three epochs
-    for _ in range(1):
+    for epoch in range(25):
+        print("Epoch", epoch)
         X = None
         start_index = 0
+        rand_indices = torch.randperm(X_FULL.size(0))
+        X_FULL = X_FULL[rand_indices]
         # For each epochs
         while True:
             # A subset of data
@@ -105,6 +109,7 @@ def kmeans(
             if center_shift ** 2 < tol or iteration > 20000:
                 start_index += trunk_size
                 X = None
+                initial_state_list.append(initial_state.clone().cpu())
 
                 if start_index + trunk_size < dataset_size:
                     continue
@@ -151,8 +156,50 @@ def kmeans_predict(
 
     return choice_cluster.cpu()
 
+def pairwise_distance_euclidean_mem_efficient_batched(data1, data2, device=torch.device('cpu'), batch_size=256):
+    """
+    Compute pairwise Euclidean distance in a memory-efficient way, suitable for large datasets.
+    
+    Args:
+    - data1 (Tensor): Tensor of shape [N, D], where N is the number of vectors and D is the dimensionality.
+    - data2 (Tensor): Tensor of shape [M, D], where M is the number of vectors and D is the dimensionality.
+    - device (torch.device): The device (CPU/GPU) on which to perform the computation.
+    - batch_size (int): The size of each batch to be processed. Adjust based on your GPU's memory capacity.
+    
+    Returns:
+    - distances (Tensor): A tensor containing the pairwise distances between each pair of vectors in data1 and data2.
+    """
+    # Transfer data2 to GPU and compute its squared norm
+    data2 = data2.to(device)
+    norm2 = data2.pow(2).sum(dim=1, keepdim=True)
+
+    # Initialize a tensor to hold the computed distances
+    distances = torch.zeros(data1.shape[0], data2.shape[0], device=device)
+    
+    # Process data1 in batches to save memory
+    for i in range(0, data1.shape[0], batch_size):
+        # Compute the end index of the current batch
+        end = min(i + batch_size, data1.shape[0])
+        
+        # Transfer the current batch to GPU and compute its squared norm
+        batch_data1 = data1[i:end].to(device)
+        norm1 = batch_data1.pow(2).sum(dim=1, keepdim=True)
+        
+        # Compute dot products between the current batch and data2
+        dot_product = torch.mm(batch_data1, data2.transpose(0, 1))
+        
+        # Compute distances for the current batch and store them
+        distances[i:end, :] = norm1 + norm2.transpose(0, 1) - 2 * dot_product
+    
+    # Optionally, move the distances matrix back to CPU if further processing is needed there
+    # distances = distances.cpu()
+    
+    return distances
+
+
 def pairwise_distance_euclidean_mem_efficient(data1, data2, device=torch.device('cpu')):
-    # transfer to device
+    # data1 shape: [1598000, 768]
+    # data2 shape: [4096, 768]
     data1, data2 = data1.to(device), data2.to(device)
 
     # Compute squared norms of each row in data1 and data2
