@@ -21,7 +21,7 @@ def kmeans(
         num_clusters,
         distance='euclidean',
         tol=1e-4,
-        trunk_size=2560000, # this actually not limited here because we have implemented pairwise_distance_euclidean_mem_efficient_batched
+        trunk_size=2560000,
         device=torch.device('cpu')
 ):
     """
@@ -72,9 +72,7 @@ def kmeans(
             if initial_state is None:
                 initial_state = initialize(X, num_clusters)
 
-            dis = pairwise_distance_function(X, initial_state, device=device)
-
-            choice_cluster = torch.argmin(dis, dim=1)
+            choice_cluster = pairwise_distance_function(X, initial_state, device=device)
 
             initial_state_pre = initial_state.clone()
 
@@ -174,8 +172,9 @@ def pairwise_distance_euclidean_mem_efficient_batched(data1, data2, device=torch
     norm2 = data2.pow(2).sum(dim=1, keepdim=True)
 
     # Initialize a tensor to hold the computed distances
-    distances = torch.zeros(data1.shape[0], data2.shape[0], device=device)
-    
+    # distances = torch.zeros(data1.shape[0], data2.shape[0])
+    cluster_choice = torch.zeros(data1.shape[0]).to(device)
+
     # Process data1 in batches to save memory
     for i in range(0, data1.shape[0], batch_size):
         # Compute the end index of the current batch
@@ -187,14 +186,15 @@ def pairwise_distance_euclidean_mem_efficient_batched(data1, data2, device=torch
         
         # Compute dot products between the current batch and data2
         dot_product = torch.mm(batch_data1, data2.transpose(0, 1))
-        
+        dis = norm1 + norm2.transpose(0, 1) - 2 * dot_product
         # Compute distances for the current batch and store them
-        distances[i:end, :] = norm1 + norm2.transpose(0, 1) - 2 * dot_product
+        cluster_choice[i:end] = torch.argmin(dis, dim=1)
+        # distances[i:end, :] = dis.cpu()
     
     # Optionally, move the distances matrix back to CPU if further processing is needed there
     # distances = distances.cpu()
     
-    return distances
+    return cluster_choice
 
 
 def pairwise_distance_euclidean_mem_efficient(data1, data2, device=torch.device('cpu')):
