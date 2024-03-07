@@ -47,15 +47,15 @@ def kmeans(
     initial_state = None
 
     # convert to float
-    X_FULL = X_FULL.float()
+    X_FULL = X_FULL.half()
     dataset_size=len(X_FULL)
 
     iteration = 0
     tqdm_meter = tqdm(desc='[running kmeans]')
-    initial_state_list = []
+    # initial_state_list = []
 
     # Three epochs
-    for epoch in range(25):
+    for epoch in range(1):
         print("Epoch", epoch)
         X = None
         start_index = 0
@@ -66,6 +66,7 @@ def kmeans(
             # A subset of data
             if X is None:
                 X = X_FULL[start_index:start_index + trunk_size].to(device)
+                # X = X_FULL[start_index:start_index + trunk_size]
                 print("Process data from {} to {}".format(start_index, start_index + trunk_size))
 
             # This initial_state is iteratively updated by the dataset
@@ -78,36 +79,42 @@ def kmeans(
 
             non_matched_centroid = 0
             for index in range(num_clusters):
+                # selected = torch.nonzero(choice_cluster == index).squeeze().cpu() # .to(device)
                 selected = torch.nonzero(choice_cluster == index).squeeze().to(device)
-
                 selected = torch.index_select(X, 0, selected)
                 if len(selected) == 0:
                     initial_state[index] = initial_state_pre[index]
                     non_matched_centroid += 1
                 else:
                     initial_state[index] = selected.mean(dim=0)
-
-            center_shift = torch.sum(
+            
+            center_shift = torch.mean(
                 torch.sqrt(
                     torch.sum((initial_state - initial_state_pre) ** 2, dim=1)
                 ))
 
+            center_shift_potential_inf = torch.sum(
+                torch.sqrt(
+                    torch.sum((initial_state - initial_state_pre) ** 2, dim=1)
+                ))
+
+            assert not torch.isinf(initial_state).any(), initial_state
+
             # increment iteration
             iteration = iteration + 1
-
             # update tqdm meter
             tqdm_meter.set_postfix(
                 iteration=f'{iteration}',
                 center_shift=f'{center_shift ** 2:0.6f}',
+                center_shift_potential_inf=f'{center_shift_potential_inf ** 2:0.6f}',
                 tol=f'{tol:0.6f}',
                 non_matched_centroid=f'{non_matched_centroid:0.1f}'
             )
             tqdm_meter.update()
             
-            if center_shift ** 2 < tol or iteration > 20000:
+            if center_shift_potential_inf ** 2 < tol or iteration > 20000:
                 start_index += trunk_size
                 X = None
-                initial_state_list.append(initial_state.clone().cpu())
 
                 if start_index + trunk_size < dataset_size:
                     continue
@@ -154,7 +161,7 @@ def kmeans_predict(
 
     return choice_cluster.cpu()
 
-def pairwise_distance_euclidean_mem_efficient_batched(data1, data2, device=torch.device('cpu'), batch_size=256):
+def pairwise_distance_euclidean_mem_efficient_batched(data1, data2, device=torch.device('cpu'), batch_size=25600):
     """
     Compute pairwise Euclidean distance in a memory-efficient way, suitable for large datasets.
     
@@ -168,7 +175,7 @@ def pairwise_distance_euclidean_mem_efficient_batched(data1, data2, device=torch
     - distances (Tensor): A tensor containing the pairwise distances between each pair of vectors in data1 and data2.
     """
     # Transfer data2 to GPU and compute its squared norm
-    data2 = data2.to(device)
+    data2 = data2.half().to(device) # TODO try out half here
     norm2 = data2.pow(2).sum(dim=1, keepdim=True)
 
     # Initialize a tensor to hold the computed distances
@@ -181,7 +188,7 @@ def pairwise_distance_euclidean_mem_efficient_batched(data1, data2, device=torch
         end = min(i + batch_size, data1.shape[0])
         
         # Transfer the current batch to GPU and compute its squared norm
-        batch_data1 = data1[i:end].to(device)
+        batch_data1 = data1[i:end].half().to(device) # TODO try out half here
         norm1 = batch_data1.pow(2).sum(dim=1, keepdim=True)
         
         # Compute dot products between the current batch and data2
