@@ -47,7 +47,8 @@ def kmeans(
     initial_state = None
 
     # convert to float
-    X_FULL = X_FULL.half()
+    # X_FULL = X_FULL.half()
+    X_FULL = X_FULL.float()
     dataset_size=len(X_FULL)
 
     iteration = 0
@@ -112,6 +113,9 @@ def kmeans(
             )
             tqdm_meter.update()
             
+            if iteration > 200000:
+                break
+
             if center_shift_potential_inf ** 2 < tol or iteration > 20000:
                 start_index += trunk_size
                 X = None
@@ -175,7 +179,7 @@ def pairwise_distance_euclidean_mem_efficient_batched(data1, data2, device=torch
     - distances (Tensor): A tensor containing the pairwise distances between each pair of vectors in data1 and data2.
     """
     # Transfer data2 to GPU and compute its squared norm
-    data2 = data2.half().to(device) # TODO try out half here
+    data2 = data2.to(device) # TODO try out half here
     norm2 = data2.pow(2).sum(dim=1, keepdim=True)
 
     # Initialize a tensor to hold the computed distances
@@ -188,7 +192,7 @@ def pairwise_distance_euclidean_mem_efficient_batched(data1, data2, device=torch
         end = min(i + batch_size, data1.shape[0])
         
         # Transfer the current batch to GPU and compute its squared norm
-        batch_data1 = data1[i:end].half().to(device) # TODO try out half here
+        batch_data1 = data1[i:end].to(device) # TODO try out half here
         norm1 = batch_data1.pow(2).sum(dim=1, keepdim=True)
         
         # Compute dot products between the current batch and data2
